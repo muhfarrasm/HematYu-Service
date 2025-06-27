@@ -13,12 +13,20 @@ class TargetRequest extends FormRequest
 
     public function rules()
     {
-        return [
+        $rules = [
             'nama_target' => 'required|string|max:255',
             'target_dana' => 'required|numeric|min:0.01',
             'target_tanggal' => 'required|date|after:today',
             'deskripsi' => 'nullable|string|max:500',
+            'kategori_target_id' => 'required|exists:kategori_target,id',
         ];
+
+        // For update, don't require future date
+        if ($this->isMethod('patch')) {
+            $rules['target_tanggal'] = 'required|date';
+        }
+
+        return $rules;
     }
 
     public function messages()
@@ -33,6 +41,8 @@ class TargetRequest extends FormRequest
             'target_tanggal.date' => 'Format tanggal tidak valid',
             'target_tanggal.after' => 'Target tanggal harus setelah hari ini',
             'deskripsi.max' => 'Deskripsi maksimal 500 karakter',
+            'kategori_target_id.required' => 'Kategori target wajib dipilih',
+            'kategori_target_id.exists' => 'Kategori target tidak valid',
         ];
     }
 }

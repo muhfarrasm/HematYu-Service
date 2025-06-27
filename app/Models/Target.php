@@ -19,6 +19,7 @@ class Target extends Model
         'deskripsi',
         'status',
         'user_id',
+        'kategori_target_id',
     ];
 
     protected $casts = [

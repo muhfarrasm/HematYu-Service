@@ -17,6 +17,8 @@ class KategoriPemasukanController extends Controller
     {
         $categories = KategoriPemasukan::where('user_id', auth()->id())
             ->orderBy('nama_kategori')
+            ->withCount('pemasukan')
+            ->withSum('pemasukan', 'jumlah')
             ->get();
 
         return response()->json([
@@ -53,7 +55,7 @@ class KategoriPemasukanController extends Controller
 
         return response()->json([
             'status' => 'success',
-            'data' => $category->load('pemasukan')
+            'data' => $category,
         ]);
     }
 
