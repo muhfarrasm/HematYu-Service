@@ -39,6 +39,19 @@ class RelasiTargetPemasukanController extends Controller
             // Debug data yang diterima
             logger()->info('Request data:', $request->all());
 
+            // Validasi total alokasi target tidak boleh lebih besar dari target_dana
+            $target = \App\Models\Target::findOrFail($request->id_target);
+            $totalAlokasiSaatIni = $target->relasiPemasukan()->sum('jumlah_alokasi');
+            $totalBaru = $totalAlokasiSaatIni + $request->jumlah_alokasi;
+
+            if ($totalBaru > $target->target_dana) {
+                return response()->json([
+                    'status' => 'error',
+                    'message' => 'Jumlah alokasi melebihi target dana. Maksimal sisa alokasi: ' . number_format($target->target_dana - $totalAlokasiSaatIni, 2)
+                ], 400);
+            }
+
+
             $data = [
                 'id_target' => $request->id_target,
                 'id_pemasukan' => $request->id_pemasukan,
