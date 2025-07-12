@@ -1,8 +1,9 @@
 <?php
 
+use App\Http\Controllers\Api\DashboardController;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Api\AuthController;
-use App\Http\Controllers\Api\DashboardController;
+
 use App\Http\Controllers\Api\KategoriPemasukanController;
 use App\Http\Controllers\Api\KategoriPengeluaranController;
 use App\Http\Controllers\Api\KategoriTargetController;
@@ -11,17 +12,24 @@ use App\Http\Controllers\Api\PengeluaranController;
 use App\Http\Controllers\Api\RelasiTargetPemasukanController;
 use App\Http\Controllers\Api\TargetController;
 
+// Public auth routes (outside middleware)
+Route::prefix('auth')->group(function () {
+    Route::post('register', [AuthController::class, 'register']);
+    Route::post('login', [AuthController::class, 'login']);
+});
+
 Route::middleware('auth:api')->group(function () {
     // Auth routes
     Route::prefix('auth')->group(function () {
         Route::post('logout', [AuthController::class, 'logout']);
         Route::post('refresh', [AuthController::class, 'refresh']);
-        Route::get('me', [AuthController::class, 'me']);
+        Route::get('me', [AuthController::class, 'me']); // Endpoint untuk data user yang login
     });
 
-    // Dashboard routes
     Route::prefix('dashboard')->group(function () {
         Route::get('/', [DashboardController::class, 'index']);
+        Route::get('summary', [DashboardController::class, 'summary']);
+        Route::get('cash-flow', [DashboardController::class, 'cashFlow']);
     });
 
     // Kategori Pemasukan routes
@@ -56,35 +64,36 @@ Route::middleware('auth:api')->group(function () {
         Route::get('/{id}/status-distribution', [KategoriTargetController::class, 'statusDistribution']);
     });
 
-    // Pemasukan Routes (DIUBAH - dipisah dari kategori-pemasukan)
+    // Pemasukan Routes
     Route::prefix('pemasukan')->group(function () {
-        // CRUD Operations
         Route::get('/', [PemasukanController::class, 'index']);
         Route::post('/', [PemasukanController::class, 'store']);
         Route::get('/{id}', [PemasukanController::class, 'show']);
         Route::put('/{id}', [PemasukanController::class, 'update']);
         Route::delete('/{id}', [PemasukanController::class, 'destroy']);
 
-        // Monthly Total
+        // Dashboard specific routes
         Route::get('/total/monthly', [PemasukanController::class, 'monthlyTotal']);
+        Route::get('/total/12monthly', [PemasukanController::class, 'yearlyTotal']);
     });
 
     // Pengeluaran Routes
-
     Route::prefix('pengeluaran')->group(function () {
-        // CRUD Operations
-        Route::get('/', [PengeluaranController::class, 'index']);
+        // Rute spesifik/fixed-path harus di atas rute dengan parameter variabel {id}
+        Route::get('/total/monthly', [PengeluaranController::class, 'monthlyTotal']);
+        Route::get('/monthly-category-summary', [PengeluaranController::class, 'monthlyCategorySummary']);
+
+        // Rute CRUD dengan parameter {id} harus di bawah rute fixed-path
+        Route::get('/', [PengeluaranController::class, 'index']); // Ini juga bisa di atas {id}
         Route::post('/', [PengeluaranController::class, 'store']);
-        Route::get('/{id}', [PengeluaranController::class, 'show']);
+        Route::get('/{id}', [PengeluaranController::class, 'show']); // PASTIKAN INI DI BAWAH fixed path
         Route::put('/{id}', [PengeluaranController::class, 'update']);
         Route::delete('/{id}', [PengeluaranController::class, 'destroy']);
-
-        // Monthly Total
-        Route::get('/total/monthly', [PengeluaranController::class, 'monthlyTotal']);
     });
 
     // Relasi Taget Pemasukan Route
     Route::prefix('relasi-target-pemasukan')->group(function () {
+        Route::get('/', [RelasiTargetPemasukanController::class, 'index']);
         Route::post('/', [RelasiTargetPemasukanController::class, 'store']);
         Route::get('/{id}', [RelasiTargetPemasukanController::class, 'show']);
         Route::put('/{id}', [RelasiTargetPemasukanController::class, 'update']);
@@ -96,18 +105,11 @@ Route::middleware('auth:api')->group(function () {
 
     // Target Routes
     Route::prefix('target')->group(function () {
-        Route::get('summary', [TargetController::class, 'summary']);
+        Route::get('summary', [TargetController::class, 'summary']); // Hanya satu ini
         Route::get('/', [TargetController::class, 'index']);
         Route::post('/', [TargetController::class, 'store']);
         Route::get('/{id}', [TargetController::class, 'show']);
-        Route::put('/{id}', [TargetController::class, 'update']);
+        Route::put('/{id}', [TargetController::class, 'update']); // **PERBAIKAN:** Hapus 'action:'
         Route::delete('/{id}', [TargetController::class, 'destroy']);
-        Route::get('summary', [TargetController::class, 'summary']);
     });
-});
-
-// Public auth routes
-Route::prefix('auth')->group(function () {
-    Route::post('register', [AuthController::class, 'register']);
-    Route::post('login', [AuthController::class, 'login']);
 });

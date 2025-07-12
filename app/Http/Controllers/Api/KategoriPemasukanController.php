@@ -51,6 +51,7 @@ class KategoriPemasukanController extends Controller
     public function show($id): JsonResponse
     {
         $category = KategoriPemasukan::where('user_id', auth()->id())
+            ->with('pemasukan')
             ->findOrFail($id);
 
         return response()->json([

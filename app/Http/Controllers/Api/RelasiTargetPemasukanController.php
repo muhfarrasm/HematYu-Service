@@ -9,6 +9,27 @@ use Illuminate\Http\JsonResponse;
 
 class RelasiTargetPemasukanController extends Controller
 {
+
+    /**
+     * Get all allocations for current user
+     */
+    public function index(): JsonResponse
+    {
+        $relasi = RelasiTargetPemasukan::with(['target', 'pemasukan'])
+            ->whereHas('target', function ($q) {
+                $q->where('user_id', auth()->id());
+            })
+            ->whereHas('pemasukan', function ($q) {
+                $q->where('user_id', auth()->id());
+            })
+            ->get();
+
+        return response()->json([
+            'status' => 'success',
+            'data' => $relasi
+        ]);
+    }
+
     /**
      * Create new allocation
      */

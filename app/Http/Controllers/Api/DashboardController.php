@@ -14,22 +14,59 @@ class DashboardController extends Controller
     public function index(Request $request)
     {
         $range = $request->get('range', '12month');
-        $month = $request->get('month', Carbon::now()->month);
         $year = $request->get('year', Carbon::now()->year);
 
         $user = Auth::user();
 
-        if ($range === '1month') {
-            return $this->getOneMonthData($user, $month, $year);
+        if ($range === 'alltime') {
+            return $this->getAllTimeData($user);
         }
 
-        return $this->getTwelveMonthsData($user);
+        return $this->getTwelveMonthsData($user, $year);
+    }
+
+    /**
+     * Data saldo keseluruhan (tanpa range)
+     */
+    private function getAllTimeData($user)
+    {
+        $totalPemasukan = Pemasukan::where('user_id', $user->id)->sum('jumlah') ?? 0;
+        $totalPengeluaran = Pengeluaran::where('user_id', $user->id)->sum('jumlah') ?? 0;
+        $saldo = $totalPemasukan - $totalPengeluaran;
+
+        // Dapatkan 5 transaksi terakhir pemasukan dan pengeluaran
+        $lastPemasukan = Pemasukan::where('user_id', $user->id)
+                          ->orderBy('tanggal', 'desc')
+                          ->limit(5)
+                          ->get();
+
+        $lastPengeluaran = Pengeluaran::where('user_id', $user->id)
+                            ->orderBy('tanggal', 'desc')
+                            ->limit(5)
+                            ->get();
+
+        return response()->json([
+            'status' => 'success',
+            'range' => 'alltime',
+            'current_date' => Carbon::now()->format('Y-m-d'),
+            'data' => [
+                'summary' => [
+                    'total_pemasukan' => (float) $totalPemasukan,
+                    'total_pengeluaran' => (float) $totalPengeluaran,
+                    'saldo' => (float) $saldo
+                ],
+                'last_transactions' => [
+                    'pemasukan' => $lastPemasukan,
+                    'pengeluaran' => $lastPengeluaran
+                ]
+            ]
+        ]);
     }
 
     /**
      * Data 12 bulan terakhir (full bulan)
      */
-    private function getTwelveMonthsData($user)
+    private function getTwelveMonthsData($user, $year)
     {
         $monthlyData = collect();
         $now = Carbon::now();
@@ -41,7 +78,7 @@ class DashboardController extends Controller
             
             $monthlyData->push($this->getMonthlySummary($user, $month, $year, $date));
         }
-        
+
         return response()->json([
             'status' => 'success',
             'range' => '12month',
@@ -49,38 +86,7 @@ class DashboardController extends Controller
             'data' => [
                 'history' => $monthlyData,
                 'chart_data' => $this->buildChartData($monthlyData, 'M Y'),
-                'current_balance' => $monthlyData->last()['saldo']
-            ]
-        ]);
-    }
-
-    /**
-     * Data 1 bulan (realtime sampai hari ini untuk bulan berjalan)
-     */
-    private function getOneMonthData($user, $month, $year)
-    {
-        $currentDate = Carbon::now();
-        $isCurrentMonth = ($month == $currentDate->month && $year == $currentDate->year);
-        $targetDate = Carbon::create($year, $month);
-        
-        $daysInMonth = $isCurrentMonth 
-            ? $currentDate->day 
-            : $targetDate->daysInMonth;
-
-        $dailyData = collect();
-
-        for ($day = 1; $day <= $daysInMonth; $day++) {
-            $dailyData->push($this->getDailySummary($user, $day, $month, $year, $isCurrentMonth, $currentDate));
-        }
-        
-        return response()->json([
-            'status' => 'success',
-            'range' => '1month',
-            'current_date' => $currentDate->format('Y-m-d'),
-            'data' => [
-                'history' => $dailyData,
-                'chart_data' => $this->buildChartData($dailyData, 'd M'),
-                'current_balance' => $dailyData->sum('saldo')
+                'current_balance' => $monthlyData->sum('saldo')
             ]
         ]);
     }
@@ -94,12 +100,12 @@ class DashboardController extends Controller
             ->whereMonth('tanggal', $month)
             ->whereYear('tanggal', $year)
             ->sum('jumlah') ?? 0;
-            
+
         $pengeluaran = Pengeluaran::where('user_id', $user->id)
             ->whereMonth('tanggal', $month)
             ->whereYear('tanggal', $year)
             ->sum('jumlah') ?? 0;
-        
+
         return [
             'period' => $date->format('M Y'),
             'pemasukan' => (float) $pemasukan,
@@ -109,36 +115,6 @@ class DashboardController extends Controller
             'year' => $year,
             'type' => 'monthly',
             'is_current' => ($month == Carbon::now()->month && $year == Carbon::now()->year)
-        ];
-    }
-
-    /**
-     * Ringkasan data harian
-     */
-    private function getDailySummary($user, $day, $month, $year, $isCurrentMonth, $currentDate)
-    {
-        $pemasukan = Pemasukan::where('user_id', $user->id)
-            ->whereDay('tanggal', $day)
-            ->whereMonth('tanggal', $month)
-            ->whereYear('tanggal', $year)
-            ->sum('jumlah') ?? 0;
-            
-        $pengeluaran = Pengeluaran::where('user_id', $user->id)
-            ->whereDay('tanggal', $day)
-            ->whereMonth('tanggal', $month)
-            ->whereYear('tanggal', $year)
-            ->sum('jumlah') ?? 0;
-        
-        return [
-            'period' => sprintf('%02d-%s', $day, Carbon::create($year, $month)->format('M')),
-            'pemasukan' => (float) $pemasukan,
-            'pengeluaran' => (float) $pengeluaran,
-            'saldo' => (float) ($pemasukan - $pengeluaran),
-            'day' => $day,
-            'month' => $month,
-            'year' => $year,
-            'type' => 'daily',
-            'is_current_day' => $isCurrentMonth && $day == $currentDate->day
         ];
     }
 

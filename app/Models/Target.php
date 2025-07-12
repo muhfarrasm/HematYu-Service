@@ -39,10 +39,16 @@ class Target extends Model
         return $this->hasMany(RelasiTargetPemasukan::class, 'id_target');
     }
 
+    public function kategoriTarget()
+    {
+        return $this->belongsTo(KategoriTarget::class);
+    }
+
     // Helper Methods
     public function getPersentaseTercapai()
     {
-        if ($this->target_dana == 0) return 0;
+        if ($this->target_dana == 0)
+            return 0;
         return ($this->terkumpul / $this->target_dana) * 100;
     }
 
@@ -55,7 +61,7 @@ class Target extends Model
     {
         $totalTerkumpul = $this->relasiPemasukan()->sum('jumlah_alokasi');
         $this->update(['terkumpul' => $totalTerkumpul]);
-        
+
         // Update status
         if ($this->terkumpul >= $this->target_dana) {
             $this->update(['status' => 'tercapai']);

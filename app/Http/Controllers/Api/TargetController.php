@@ -15,7 +15,7 @@ class TargetController extends Controller
      */
     public function index(Request $request): JsonResponse
     {
-        $query = Target::with(['user', 'relasiPemasukan.pemasukan'])
+        $query = Target::with(['user', 'relasiPemasukan.pemasukan', 'kategoriTarget'])
             ->where('user_id', auth()->id());
 
         // Filter by status
@@ -80,7 +80,7 @@ class TargetController extends Controller
      */
     public function show($id): JsonResponse
     {
-        $target = Target::with(['relasiPemasukan.pemasukan'])
+        $target = Target::with(['relasiPemasukan.pemasukan', 'kategoriTarget'])
             ->where('user_id', auth()->id())
             ->findOrFail($id);
 
@@ -199,7 +199,7 @@ class TargetController extends Controller
             'status' => $target->status,
             'persentase' => $target->getPersentaseTercapai(),
             'sisa_target' => (float) $target->getSisaTarget(),
-            'kategori_target_id' => $target->kategori_target_id,
+            'nama_kategori' => optional($target->kategoriTarget)->nama_kategori,
             'created_at' => $target->created_at->toISOString(),
             'updated_at' => $target->updated_at->toISOString(),
         ];

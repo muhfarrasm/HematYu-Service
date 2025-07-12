@@ -8,6 +8,7 @@ use App\Models\Pemasukan;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
+use Carbon\Carbon;
 
 class PemasukanController extends Controller
 {
@@ -28,6 +29,15 @@ class PemasukanController extends Controller
         // Sorting by date (newest first by default)
         $pemasukan = $query->orderBy('tanggal', 'desc')->get();
 
+        // Transform bukti_transaksi URLs to full paths
+        $pemasukan->transform(function ($item) {
+            $item->bukti_transaksi = $item->bukti_transaksi
+                ? Storage::url('bukti_transaksi/' . $item->bukti_transaksi)
+                : null;
+
+            $item->nama_kategori = $item->kategori?->nama_kategori;
+            return $item;
+        });
         return response()->json([
             'status' => 'success',
             'data' => $pemasukan
@@ -71,13 +81,32 @@ class PemasukanController extends Controller
      */
     public function show($id): JsonResponse
     {
-        $pemasukan = Pemasukan::where('user_id', auth()->id())
-            ->findOrFail($id);
+        try { // **PERBAIKAN:** Tambahkan try-catch
+           $pemasukan = Pemasukan::with('kategori') // ✅ Include relasi kategori
+                ->where('user_id', auth()->id())
+                ->findOrFail($id);
 
-        return response()->json([
-            'status' => 'success',
-            'data' => $pemasukan
-        ]);
+             $pemasukan->bukti_transaksi = $pemasukan->bukti_transaksi
+                ? Storage::url('bukti_transaksi/' . $pemasukan->bukti_transaksi)
+                : null;
+                
+            $pemasukan->nama_kategori = $pemasukan->kategori?->nama_kategori;   
+
+            return response()->json([
+                'status' => 'success',
+                'data' => $pemasukan
+            ]);
+        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Pemasukan tidak ditemukan.'
+            ], 404);
+        } catch (\Exception $e) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Terjadi kesalahan: ' . $e->getMessage()
+            ], 500);
+        }
     }
 
     /**
@@ -85,10 +114,10 @@ class PemasukanController extends Controller
      */
     public function update(PemasukanRequest $request, $id): JsonResponse
     {
-        $pemasukan = Pemasukan::where('user_id', auth()->id())
-            ->findOrFail($id);
-
         try {
+            $pemasukan = Pemasukan::where('user_id', auth()->id())
+                ->findOrFail($id);
+
             // Validasi data terlebih dahulu
             $validatedData = $request->validated();
 
@@ -105,7 +134,16 @@ class PemasukanController extends Controller
                 $validatedData['bukti_transaksi'] = $filename;
             } else {
                 // Pertahankan file yang ada jika tidak diupdate
-                $validatedData['bukti_transaksi'] = $pemasukan->bukti_transaksi;
+                // **PERBAIKAN KECIL:** Jika client mengirim 'bukti_transaksi' = null, maka set null.
+                // Jika tidak dikirim sama sekali, pertahankan yang lama.
+                if ($request->has('bukti_transaksi') && $request->input('bukti_transaksi') === null) {
+                    if ($pemasukan->bukti_transaksi) {
+                        Storage::disk('public')->delete('bukti_transaksi/' . $pemasukan->bukti_transaksi);
+                    }
+                    $validatedData['bukti_transaksi'] = null;
+                } else {
+                    $validatedData['bukti_transaksi'] = $pemasukan->bukti_transaksi;
+                }
             }
 
             $pemasukan->update($validatedData);
@@ -115,6 +153,11 @@ class PemasukanController extends Controller
                 'message' => 'Pemasukan berhasil diperbarui',
                 'data' => $pemasukan->fresh()
             ]);
+        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) { // **PERBAIKAN:** Tambahkan penanganan 404
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Pemasukan tidak ditemukan.'
+            ], 404);
         } catch (\Exception $e) {
             return response()->json([
                 'status' => 'error',
@@ -127,10 +170,10 @@ class PemasukanController extends Controller
      */
     public function destroy($id): JsonResponse
     {
-        $pemasukan = Pemasukan::where('user_id', auth()->id())
-            ->findOrFail($id);
+        try { // **PERBAIKAN:** Tambahkan try-catch
+            $pemasukan = Pemasukan::where('user_id', auth()->id())
+                ->findOrFail($id);
 
-        try {
             // Delete associated file if exists
             if ($pemasukan->bukti_transaksi) {
                 Storage::disk('public')->delete('bukti_transaksi/' . $pemasukan->bukti_transaksi);
@@ -142,6 +185,11 @@ class PemasukanController extends Controller
                 'status' => 'success',
                 'message' => 'Pemasukan berhasil dihapus'
             ]);
+        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Pemasukan tidak ditemukan.'
+            ], 404);
         } catch (\Exception $e) {
             return response()->json([
                 'status' => 'error',
@@ -168,10 +216,55 @@ class PemasukanController extends Controller
         return response()->json([
             'status' => 'success',
             'data' => [
-                'total' => $total,
-                'month' => $request->month,
-                'year' => $request->year
+                'total' => (float) $total, // **PERBAIKAN:** Pastikan tipe data float
+                'month' => (int) $request->month,
+                'year' => (int) $request->year
             ]
+        ]);
+    }
+
+    /**
+     * Get total income for the last 12 months, broken down by month.
+     * Can optionally filter by 'year'. If no 'year', uses current year.
+     */
+    public function yearlyTotal(Request $request): JsonResponse
+    {
+        $user = $request->user();
+        $year = $request->input('year', Carbon::now()->year); // Default to current year
+
+        // **PERBAIKAN KECIL:** Sesuaikan rentang tanggal jika Anda hanya ingin data dari tahun yang diminta
+        $startDate = Carbon::create($year, 1, 1)->startOfDay();
+        $endDate = Carbon::create($year, 12, 31)->endOfDay();
+
+        $results = Pemasukan::where('user_id', $user->id)
+            ->whereBetween('tanggal', [$startDate, $endDate])
+            ->selectRaw('MONTH(tanggal) as bulan, SUM(jumlah) as total')
+            ->groupBy('bulan')
+            ->orderBy('bulan')
+            ->get();
+
+        // Fill in months with no transactions with total 0
+        $monthlyData = [];
+        for ($i = 1; $i <= 12; $i++) {
+            $monthlyData[$i] = 0.0; // Initialize with float
+        }
+        foreach ($results as $row) {
+            $monthlyData[$row->bulan] = (float) $row->total;
+        }
+
+        // Convert to format array of objects { 'month': X, 'total': Y }
+        $formattedResults = [];
+        foreach ($monthlyData as $monthNum => $total) {
+            $formattedResults[] = [
+                'month' => $monthNum,
+                'total' => $total,
+            ];
+        }
+
+        return response()->json([
+            'status' => 'success',
+            'data' => $formattedResults,
+            'year' => (int) $year
         ]);
     }
 }

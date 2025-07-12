@@ -16,6 +16,7 @@ class PemasukanRequest extends FormRequest
         $rules = [
             'jumlah' => 'required|numeric|min:0.01',
             'tanggal' => 'required|date|before_or_equal:today',
+            'deskripsi' => 'nullable|string',
             'kategori_id' => [
                 'required',
                 'integer',
