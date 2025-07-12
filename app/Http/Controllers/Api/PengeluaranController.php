@@ -62,7 +62,22 @@ class PengeluaranController extends Controller
             ], 400);
         }
 
-        
+        // Validasi: pengeluaran tidak boleh melebihi anggaran kategori
+        $kategori = \App\Models\KategoriPengeluaran::find($data['kategori_id']);
+        if ($kategori) {
+            $pengeluaranKategoriSaatIni = $kategori->pengeluaran()->sum('jumlah');
+            $totalSetelahTambah = $pengeluaranKategoriSaatIni + $data['jumlah'];
+
+            if ($totalSetelahTambah > $kategori->anggaran) {
+                return response()->json([
+                    'status' => 'error',
+                    'message' => 'Pengeluaran melebihi anggaran kategori.'
+                ], 400);
+            }
+        }
+
+
+
 
         // Handle file upload
         if ($request->hasFile('bukti_transaksi')) {
@@ -131,6 +146,24 @@ class PengeluaranController extends Controller
             $totalPengeluaranLain = Pengeluaran::where('user_id', $user->id)
                 ->where('id', '!=', $pengeluaran->id)
                 ->sum('jumlah');
+
+            $kategori = \App\Models\KategoriPengeluaran::find($data['kategori_id']);
+            if ($kategori) {
+                // Jumlah pengeluaran lain di kategori tersebut
+                $pengeluaranKategoriLain = $kategori->pengeluaran()
+                    ->where('id', '!=', $pengeluaran->id)
+                    ->sum('jumlah');
+
+                $totalSetelahUpdate = $pengeluaranKategoriLain + $data['jumlah'];
+
+                if ($totalSetelahUpdate > $kategori->anggaran) {
+                    return response()->json([
+                        'status' => 'error',
+                        'message' => 'Pengeluaran melebihi anggaran kategori.'
+                    ], 400);
+                }
+            }
+
 
             // Validasi saldo mencukupi
             if ($totalPengeluaranLain + $data['jumlah'] > $totalPemasukan) {
