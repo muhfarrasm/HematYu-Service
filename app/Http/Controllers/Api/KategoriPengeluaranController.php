@@ -15,18 +15,32 @@ class KategoriPengeluaranController extends Controller
      * Get all categories for current user
      */
     public function index(): JsonResponse
-    {
-        $categories = KategoriPengeluaran::where('user_id', auth()->id())
-            ->orderBy('nama_kategori')
-            ->withCount('pengeluaran')
-            ->withSum('pengeluaran', 'jumlah')
-            ->get();
+{
+    $categories = KategoriPengeluaran::where('user_id', auth()->id())
+        ->orderBy('nama_kategori')
+        ->withCount('pengeluaran')
+        ->withSum('pengeluaran', 'jumlah')
+        ->get()
+        ->map(function ($category) {
+            return [
+                'id' => $category->id,
+                'nama_kategori' => $category->nama_kategori,
+                'deskripsi' => $category->deskripsi,
+                'anggaran' => (float) $category->anggaran,
+                'pengeluaran_count' => $category->pengeluaran_count,
+                'pengeluaran_sum_jumlah' => (float) ($category->pengeluaran_sum_jumlah ?? 0),
+                'user_id' => $category->user_id,
+                'created_at' => $category->created_at,
+                'updated_at' => $category->updated_at,
+            ];
+        });
 
-        return response()->json([
-            'status' => 'success',
-            'data' => $categories
-        ]);
-    }
+    return response()->json([
+        'status' => 'success',
+        'data' => $categories
+    ]);
+}
+
 
     /**
      * Create new category
